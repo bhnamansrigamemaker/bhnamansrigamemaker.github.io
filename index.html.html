@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>سنگ سیزیف — بازی دوبعدی</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+      font-family: Tahoma, "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: #f8fafc;
+    }
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(245, 158, 11, 0.6);
+    }
+    .btn-primary:active {
+      transform: scale(0.96);
+    }
+    .push-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 8px 24px rgba(34, 197, 94, 0.45);
+      transition: transform 0.08s ease;
+    }
+    .push-btn:active, .push-btn.pressed {
+      transform: scale(0.93);
+      background: linear-gradient(135deg, #16a34a, #15803d);
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-screen bg-slate-950">
+
+  <!-- Top HUD -->
+  <header class="w-full px-3 py-2 sm:px-5 sm:py-2.5 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between gap-2 z-20 shrink-0">
+    <div class="flex items-center gap-3 sm:gap-5">
+      <div class="flex flex-col">
+        <span class="text-[11px] text-slate-400">مرحله</span>
+        <span id="hud-level" class="text-base sm:text-xl font-bold text-amber-400 tabular-nums" dir="ltr">1</span>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-[11px] text-slate-400">اهداف باقی‌مانده</span>
+        <span id="hud-remaining" class="text-base sm:text-xl font-bold text-rose-400 tabular-nums" dir="ltr">5</span>
+      </div>
+      <div class="flex flex-col">
+        <span class="text-[11px] text-slate-400">ارتفاع صعود</span>
+        <span id="hud-progress" class="text-base sm:text-xl font-bold text-emerald-400 tabular-nums" dir="ltr">0%</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button id="btn-mute" type="button" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm transition" title="قطع/وصل صدا">
+        <span id="mute-icon">🔊</span>
+      </button>
+      <button id="btn-reset" type="button" class="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-medium transition">
+        شروع مجدد
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Canvas Area -->
+  <main id="canvas-container" class="relative flex-1 w-full overflow-hidden">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Status Toast -->
+    <div id="status-banner" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-full bg-slate-900/90 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-bold shadow-lg pointer-events-none whitespace-nowrap"></div>
+
+    <!-- Push / Run & Jump Buttons -->
+    <div id="controls-bar" class="hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1.5">
+      <div class="flex items-center gap-3">
+        <button id="btn-push" type="button" class="push-btn px-6 py-3.5 rounded-2xl text-white font-extrabold text-base sm:text-lg cursor-pointer flex items-center gap-2">
+          <span id="btn-push-icon">💪</span>
+          <span id="btn-push-text">هل بده بالا!</span>
+        </button>
+        <button id="btn-hop" type="button" class="hidden btn-primary px-6 py-3.5 rounded-2xl text-white font-extrabold text-base cursor-pointer flex items-center gap-2">
+          <span>⬆️</span>
+          <span>پرش!</span>
+        </button>
+      </div>
+      <span id="controls-hint" class="text-[11px] text-slate-200 bg-slate-900/75 px-2.5 py-0.5 rounded-full">یا کلید Space / فلش راست را نگه دارید یا بزنید</span>
+    </div>
+
+    <!-- Rooftop Choice Bar (Only Jump option shown, waiting has unknown consequence) -->
+    <div id="rooftop-bar" class="hidden absolute bottom-5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
+      <button id="btn-jump-roof" type="button" class="btn-primary px-7 py-3.5 rounded-2xl text-white font-extrabold text-base cursor-pointer flex items-center gap-2">
+        <span>🏊</span>
+        <span>بپرم در استخر؟ (پرش)</span>
+      </button>
+      <span class="text-xs text-slate-200 bg-slate-900/85 px-3 py-1 rounded-full border border-slate-700">یا Space بزن تا بپری — یا صبر کن...</span>
+    </div>
+
+    <!-- Start Menu Overlay -->
+    <div id="overlay-menu" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/75">
+      <div class="glass-panel rounded-2xl p-6 sm:p-8 max-w-md w-full text-center space-y-5">
+        <div class="text-5xl">🪨⛰️</div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-white">صخره و دامنه کوه</h1>
+          <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+            سنگ عظیم را از دامنه کوه به سمت قله هل بده! اما مراقب باش؛ هر بار در میانه راه سنگ سر می‌خورد و پایین می‌افتد و روی یکی از آدم‌های پایین کوه له می‌شود تا وارد مرحله بعد شوی!
+          </p>
+        </div>
+        <div class="bg-slate-900/75 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1.5 text-right">
+          <div>• <strong class="text-amber-300">هدف:</strong> سنگ را تا نقطه لغزش بالا ببر تا به پایین سقوط کند.</div>
+          <div>• <strong class="text-emerald-300">کنترل:</strong> کلیدهای <span class="px-1.5 py-0.5 rounded bg-slate-800 font-mono" dir="ltr">Space / D / ▶</span> یا دکمه «هل بده بالا!».</div>
+          <div>• <strong class="text-rose-300">صعود به مرحله بعد:</strong> با له شدن هر نفر در پایین کوه!</div>
+        </div>
+        <button id="btn-start" type="button" class="btn-primary w-full py-3.5 rounded-xl text-white font-bold text-base cursor-pointer">
+          شروع بازی
+        </button>
+      </div>
+    </div>
+
+    <!-- Victory Overlay -->
+    <div id="overlay-victory" class="hidden absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80">
+      <div class="glass-panel rounded-2xl p-6 sm:p-8 max-w-sm w-full text-center space-y-5">
+        <div id="victory-icon" class="text-5xl">⚡💀</div>
+        <div>
+          <h2 id="victory-title" class="text-2xl sm:text-3xl font-extrabold text-slate-100">پایان سرنوشت!</h2>
+          <p id="victory-desc" class="text-sm text-slate-300 mt-2 leading-relaxed"></p>
+        </div>
+        <div class="flex flex-col gap-2.5">
+          <button id="btn-endless" type="button" class="btn-primary w-full py-3 rounded-xl text-white font-bold text-sm cursor-pointer">
+            ادامه با گروه جدید (حالت بی‌نهایت)
+          </button>
+          <button id="btn-restart-win" type="button" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm transition cursor-pointer">
+            شروع از مرحله ۱
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const container = document.getElementById('canvas-container');
+      const canvas = document.getElementById('game-canvas');
+      const ctx = canvas.getContext('2d');
+
+      const hudLevel = document.getElementById('hud-level');
+      const hudRemaining = document.getElementById('hud-remaining');
+      const hudProgress = document.getElementById('hud-progress');
+
+      const statusBanner = document.getElementById('status-banner');
+      const controlsBar = document.getElementById('controls-bar');
+      const overlayMenu = document.getElementById('overlay-menu');
+      const overlayVictory = document.getElementById('overlay-victory');
+
+      const btnStart = document.getElementById('btn-start');
+      const btnPush = document.getElementById('btn-push');
+      const btnHop = document.getElementById('btn-hop');
+      const btnPushIcon = document.getElementById('btn-push-icon');
+      const btnPushText = document.getElementById('btn-push-text');
+      const controlsHint = document.getElementById('controls-hint');
+      const rooftopBar = document.getElementById('rooftop-bar');
+      const btnJumpRoof = document.getElementById('btn-jump-roof');
+      const victoryIcon = document.getElementById('victory-icon');
+      const victoryTitle = document.getElementById('victory-title');
+      const victoryDesc = document.getElementById('victory-desc');
+      const btnReset = document.getElementById('btn-reset');
+      const btnMute = document.getElementById('btn-mute');
+      const muteIcon = document.getElementById('mute-icon');
+      const btnEndless = document.getElementById('btn-endless');
+      const btnRestartWin = document.getElementById('btn-restart-win');
+
+      // Audio Synthesizer
+      let audioCtx = null;
+      let isMuted = false;
+
+      function ensureAudio() {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
+      }
+
+      function playSound(type) {
+        if (isMuted || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'push') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(95, now + 0.06);
+          gain.gain.setValueAtTime(0.06, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+          osc.start(now);
+          osc.stop(now + 0.06);
+        } else if (type === 'slip') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(520, now);
+          osc.frequency.exponentialRampToValueAtTime(150, now + 0.35);
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        } else if (type === 'squash') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(42, now + 0.28);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+          osc.start(now);
+          osc.stop(now + 0.28);
+        } else if (type === 'crow') {
+          // Two-part raspy crow screech ("Caw! Caw!")
+          osc.type = 'sawtooth';
+          const filter = audioCtx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(1150, now);
+          filter.Q.setValueAtTime(2.5, now);
+
+          osc.disconnect();
+          osc.connect(filter);
+          filter.connect(gain);
+
+          // First screech
+          osc.frequency.setValueAtTime(780, now);
+          osc.frequency.exponentialRampToValueAtTime(460, now + 0.16);
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime(0.24, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.17);
+
+          // Second screech
+          osc.frequency.setValueAtTime(840, now + 0.22);
+          osc.frequency.exponentialRampToValueAtTime(430, now + 0.42);
+          gain.gain.setValueAtTime(0.001, now + 0.22);
+          gain.gain.linearRampToValueAtTime(0.26, now + 0.24);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+
+          osc.start(now);
+          osc.stop(now + 0.45);
+        } else if (type === 'dodge') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(320, now);
+          osc.frequency.exponentialRampToValueAtTime(620, now + 0.14);
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+          osc.start(now);
+          osc.stop(now + 0.16);
+        } else if (type === 'scream') {
+          // Panicked crowd scream when boulder slips
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(640, now);
+          osc.frequency.linearRampToValueAtTime(920, now + 0.12);
+          osc.frequency.exponentialRampToValueAtTime(380, now + 0.55);
+          gain.gain.setValueAtTime(0.01, now);
+          gain.gain.linearRampToValueAtTime(0.18, now + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+          osc.start(now);
+          osc.stop(now + 0.58);
+        } else if (type === 'laugh') {
+          // Rhythmic mocking laughter ("Ha-ha-ha-ha!")
+          osc.type = 'triangle';
+          const bursts = [0, 0.14, 0.28, 0.42];
+          bursts.forEach((offset, idx) => {
+            const fStart = 420 - idx * 25;
+            osc.frequency.setValueAtTime(fStart, now + offset);
+            osc.frequency.exponentialRampToValueAtTime(fStart * 0.72, now + offset + 0.1);
+            gain.gain.setValueAtTime(0.001, now + offset);
+            gain.gain.linearRampToValueAtTime(0.2, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.005, now + offset + 0.11);
+          });
+          osc.start(now);
+          osc.stop(now + 0.58);
+        } else if (type === 'thunder') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(160, now);
+          osc.frequency.exponentialRampToValueAtTime(34, now + 0.65);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+          osc.start(now);
+          osc.stop(now + 0.7);
+        } else if (type === 'levelup') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.setValueAtTime(554, now + 0.1);
+          osc.frequency.setValueAtTime(659, now + 0.2);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+          osc.start(now);
+          osc.stop(now + 0.36);
+        }
+      }
+
+      // Game State
+      const PHASE = {
+        MENU: 'MENU',
+        PUSHING: 'PUSHING',
+        SLIPPING: 'SLIPPING',
+        SQUASHED: 'SQUASHED',
+        SUMMIT_FALL: 'SUMMIT_FALL',
+        DOG_REINCARNATE: 'DOG_REINCARNATE',
+        DOG_CHASE: 'DOG_CHASE',
+        ROOFTOP_CHOICE: 'ROOFTOP_CHOICE',
+        DOG_JUMP: 'DOG_JUMP',
+        DOG_COLLARED: 'DOG_COLLARED',
+        VICTORY: 'VICTORY'
+      };
+
+      let phase = PHASE.MENU;
+      let width = 900;
+      let height = 600;
+      let dpr = 1;
+      let rafId = null;
+      let lastTime = 0;
+
+      let level = 1;
+      let endlessMode = false;
+      let finalAscent = false;
+      let dogProgress = 0; // 0 to 1 along zigzag stairs
+      let chaserProgress = -0.18;
+      let dogHopY = 0;
+      let dogHopVy = 0;
+      const HAZARDS = [
+        { t: 0.22, kind: 'gap' },
+        { t: 0.44, kind: 'obstacle' },
+        { t: 0.66, kind: 'gap' },
+        { t: 0.86, kind: 'obstacle' }
+      ];
+      let dogJump = { x: 0, y: 0, vx: 0, vy: 0, survived: false, landed: false };
+      let collarWalkProgress = 1.0;
+      let dogStartedRunning = false;
+      let summitStrike = {
+        x: 0,
+        y: 0,
+        boltPoints: [],
+        boltAlpha: 0,
+        struck: false
+      };
+      let slopeProgress = 0; // 0 (bottom of slope) to 1 (summit)
+      let slipThreshold = 0.68; // where the boulder slips partway up
+      let boulderAngle = 0;
+      let boulderRollSpeed = 0;
+      let shakeTimer = 0;
+      let phaseTimer = 0;
+
+      // Pushing input
+      let pushHeld = false;
+      let pushBoost = 0;
+      let pushSoundCooldown = 0;
+
+      // Mountain geometry (computed in resize)
+      let groundY = 500;
+      let baseSlopeX = 280;
+      let peakX = 820;
+      let peakY = 120;
+      let boulderRadius = 30;
+
+      // Men, women, animals, and trees at the bottom of the mountain
+      const TARGET_TEMPLATES = [
+        { kind: 'man', name: 'مرد', color: '#e2e8f0', canDodge: true },
+        { kind: 'tree', name: 'درخت', color: '#475569', canDodge: false },
+        { kind: 'woman', name: 'زن', color: '#f8fafc', canDodge: true },
+        { kind: 'sheep', name: 'گوسفند', color: '#f1f5f9', canDodge: true },
+        { kind: 'man', name: 'مرد', color: '#94a3b8', canDodge: true },
+        { kind: 'tree', name: 'درخت', color: '#334155', canDodge: false },
+        { kind: 'woman', name: 'زن', color: '#cbd5e1', canDodge: true }
+      ];
+      let bystanders = [];
+      let currentTargetIndex = 0;
+
+      // Falling boulder projectile when it leaves the slope
+      let flyingBoulder = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        willDodge: false,
+        missed: false,
+        dodgeDir: 1
+      };
+
+      // Visual effects
+      let particles = [];
+      let floatingTexts = [];
+      let raindrops = [];
+      let lightningAlpha = 0;
+      let lightningTimer = 3.5;
+      let crow = {
+        active: false,
+        x: -60,
+        y: 60,
+        targetX: 0,
+        targetY: 0,
+        state: 'IDLE',
+        timer: 0,
+        wingPhase: 0,
+        heroEaten: false
+      };
+      let clouds = [
+        { x: 90, y: 70, s: 1.35, speed: 14 },
+        { x: 280, y: 45, s: 1.5, speed: 11 },
+        { x: 490, y: 80, s: 1.4, speed: 16 },
+        { x: 690, y: 55, s: 1.6, speed: 12 },
+        { x: 860, y: 85, s: 1.3, speed: 15 }
+      ];
+
+      function initRain() {
+        raindrops = [];
+        const count = Math.max(110, Math.floor((width * height) / 4500));
+        for (let i = 0; i < count; i++) {
+          raindrops.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            len: Math.random() * 14 + 10,
+            speed: Math.random() * 260 + 460
+          });
+        }
+      }
+
+      function initBystanders() {
+        bystanders = [];
+        const count = TARGET_TEMPLATES.length;
+        const valleyWidth = Math.max(140, baseSlopeX - 45);
+        const startX = 28;
+        const step = valleyWidth / count;
+
+        for (let i = 0; i < count; i++) {
+          const tpl = TARGET_TEMPLATES[i];
+          bystanders.push({
+            x: startX + step * (count - 1 - i) + step * 0.4,
+            y: groundY,
+            kind: tpl.kind,
+            canDodge: tpl.canDodge,
+            color: tpl.color,
+            name: tpl.name,
+            squashed: false,
+            squashScale: 1,
+            dodgeOffsetX: 0,
+            dodgeOffsetY: 0,
+            panicPhase: Math.random() * Math.PI * 2
+          });
+        }
+        currentTargetIndex = 0;
+      }
+
+      function computeGeometry() {
+        groundY = height - 95;
+        baseSlopeX = Math.max(200, width * 0.36);
+        peakX = width - 75;
+        peakY = Math.max(190, height * 0.36);
+        boulderRadius = Math.max(22, Math.min(34, width * 0.036));
+
+        // Reposition bystanders proportionally
+        if (bystanders.length > 0) {
+          const count = bystanders.length;
+          const valleyWidth = Math.max(120, baseSlopeX - 50);
+          const startX = 45;
+          const step = valleyWidth / count;
+          for (let i = 0; i < count; i++) {
+            bystanders[i].x = startX + step * (count - 1 - i) + step * 0.35;
+            bystanders[i].y = groundY;
+          }
+        }
+      }
+
+      function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        width = Math.max(320, rect.width);
+        height = Math.max(320, rect.height);
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        computeGeometry();
+        initRain();
+        render();
+      }
+
+      function showToast(msg, duration = 2.0) {
+        statusBanner.textContent = msg;
+        statusBanner.classList.remove('hidden');
+        clearTimeout(showToast._timer);
+        if (duration > 0) {
+          showToast._timer = setTimeout(() => {
+            statusBanner.classList.add('hidden');
+          }, duration * 1000);
+        }
+      }
+
+      function updateHUD() {
+        hudLevel.textContent = String(level);
+        const alive = bystanders.filter(b => !b.squashed).length;
+        hudRemaining.textContent = String(alive);
+        hudProgress.textContent = `${Math.round(slopeProgress * 100)}%`;
+      }
+
+      function setupLevel(lvl, isRetry = false) {
+        level = lvl;
+        slopeProgress = 0.04;
+        // Slip threshold varies widely: sometimes very early (20-36%), sometimes mid, sometimes right near the summit (82-93%)
+        const zoneRoll = Math.random();
+        if (zoneRoll < 0.35) {
+          slipThreshold = 0.20 + Math.random() * 0.16;
+        } else if (zoneRoll < 0.65) {
+          slipThreshold = 0.45 + Math.random() * 0.24;
+        } else {
+          slipThreshold = 0.82 + Math.random() * 0.11;
+        }
+        boulderRollSpeed = 0;
+        pushBoost = 0;
+        crow.active = false;
+        crow.state = 'IDLE';
+        crow.heroEaten = false;
+        crow.timer = 0;
+        for (let i = 0; i < bystanders.length; i++) {
+          bystanders[i].dodgeOffsetX = 0;
+          bystanders[i].dodgeOffsetY = 0;
+        }
+        phase = PHASE.PUSHING;
+        controlsBar.classList.remove('hidden');
+        updateHUD();
+        if (finalAscent) {
+          slipThreshold = 1.05;
+          showToast('صعود نهایی: حالا سنگ را تا قله بالا ببر!', 2.6);
+        } else {
+          showToast(isRetry ? `مرحله ${level}: جا خالی داد! دوباره سنگ را بالا ببر!` : `مرحله ${level}: سنگ را به قله ببر!`, 2.4);
+        }
+      }
+
+      function startNewGame() {
+        ensureAudio();
+        endlessMode = false;
+        finalAscent = false;
+        level = 1;
+        initBystanders();
+        computeGeometry();
+        overlayMenu.classList.add('hidden');
+        overlayVictory.classList.add('hidden');
+        rooftopBar.classList.add('hidden');
+        btnHop.classList.add('hidden');
+        btnPushIcon.textContent = '💪';
+        btnPushText.textContent = 'هل بده بالا!';
+        controlsHint.textContent = 'یا کلید Space / فلش راست را نگه دارید یا بزنید';
+        setupLevel(1);
+        startLoop();
+      }
+
+      function continueEndless() {
+        ensureAudio();
+        endlessMode = true;
+        finalAscent = false;
+        initBystanders();
+        computeGeometry();
+        overlayVictory.classList.add('hidden');
+        setupLevel(level + 1);
+      }
+
+      function spawnParticles(x, y, color, count, speed = 1) {
+        for (let i = 0; i < count; i++) {
+          const ang = Math.random() * Math.PI * 2;
+          const spd = (Math.random() * 120 + 30) * speed;
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd - 40,
+            r: Math.random() * 4 + 2,
+            life: Math.random() * 0.5 + 0.3,
+            maxLife: 0.8,
+            color
+          });
+        }
+      }
+
+      function addFloatingText(x, y, text, color) {
+        floatingTexts.push({ x, y, text, color, life: 1.3 });
+      }
+
+      function showEndingModal(icon, title, desc) {
+        victoryIcon.textContent = icon;
+        victoryTitle.textContent = title;
+        victoryDesc.textContent = desc;
+        controlsBar.classList.add('hidden');
+        rooftopBar.classList.add('hidden');
+        phase = PHASE.VICTORY;
+        overlayVictory.classList.remove('hidden');
+      }
+
+      function getZigzagNodes() {
+        const leftX = width * 0.22;
+        const rightX = width * 0.72;
+        const botY = groundY;
+        const roofY = Math.max(130, height * 0.24);
+        const hStep = (botY - roofY) / 4;
+        return [
+          { x: leftX, y: botY },
+          { x: rightX, y: botY - hStep },
+          { x: leftX, y: botY - hStep * 2 },
+          { x: rightX, y: botY - hStep * 3 },
+          { x: leftX + 40, y: roofY } // Rooftop landing
+        ];
+      }
+
+      function getPointOnZigzag(t) {
+        const nodes = getZigzagNodes();
+        const clamped = Math.max(0, Math.min(1, t));
+        const segs = nodes.length - 1;
+        const scaled = clamped * segs;
+        const idx = Math.min(segs - 1, Math.floor(scaled));
+        const localT = scaled - idx;
+        const a = nodes[idx];
+        const b = nodes[idx + 1];
+        return {
+          x: a.x + (b.x - a.x) * localT,
+          y: a.y + (b.y - a.y) * localT,
+          dir: b.x >= a.x ? 1 : -1
+        };
+      }
+
+      function startDogChapter() {
+        phase = PHASE.DOG_REINCARNATE;
+        phaseTimer = 0;
+        dogProgress = 0.04;
+        chaserProgress = -0.14;
+        dogStartedRunning = false;
+        dogHopY = 0;
+        dogHopVy = 0;
+        dogJump.landed = false;
+        btnHop.classList.add('hidden');
+        controlsBar.classList.add('hidden');
+        rooftopBar.classList.add('hidden');
+        showToast('دوباره زنده شدم... ولی مسخ شدم به یه سگ!! 🐕', 3.0);
+      }
+
+      function triggerHop() {
+        if (phase !== PHASE.DOG_CHASE) return;
+        ensureAudio();
+        if (dogHopY === 0) {
+          dogHopVy = -340;
+          playSound('dodge');
+        }
+      }
+
+      function triggerRoofJump() {
+        if (phase !== PHASE.ROOFTOP_CHOICE) return;
+        ensureAudio();
+        rooftopBar.classList.add('hidden');
+        const nodes = getZigzagNodes();
+        const roof = nodes[nodes.length - 1];
+        const poolX = width * 0.11;
+        const flightT = 0.95;
+        const g = 760;
+        const startX = roof.x - 10;
+        const startY = roof.y - 12;
+        dogJump.x = startX;
+        dogJump.y = startY;
+        dogJump.vx = (poolX - startX) / flightT;
+        dogJump.vy = (groundY - 8 - startY - 0.5 * g * flightT * flightT) / flightT;
+        dogJump.survived = false;
+        dogJump.landed = false;
+        phase = PHASE.DOG_JUMP;
+        phaseTimer = 0;
+        playSound('dodge');
+        addFloatingText(dogJump.x, dogJump.y - 25, 'پرید در استخر!! 🏊', '#f8fafc');
+      }
+
+      function getSlopePoint(t) {
+        // t from 0 (bottom of slope) to 1 (peak)
+        const x = baseSlopeX + (peakX - baseSlopeX) * t;
+        const y = groundY + (peakY - groundY) * t;
+        return { x, y };
+      }
+
+      function getSlopeNormal() {
+        const dx = peakX - baseSlopeX;
+        const dy = peakY - groundY; // negative
+        const len = Math.hypot(dx, dy);
+        // Outward normal (pointing up-left)
+        return { nx: dy / len, ny: -dx / len };
+      }
+
+      function triggerPushImpulse() {
+        if (phase === PHASE.ROOFTOP_CHOICE) {
+          triggerRoofJump();
+          return;
+        }
+        if (phase !== PHASE.PUSHING && phase !== PHASE.DOG_CHASE) return;
+        ensureAudio();
+        pushBoost = Math.min(0.24, pushBoost + 0.085);
+        if (pushSoundCooldown <= 0) {
+          playSound('push');
+          pushSoundCooldown = 0.14;
+        }
+        const pt = getSlopePoint(slopeProgress);
+        spawnParticles(pt.x - 15, pt.y + 4, '#cbd5e1', 3, 0.5);
+      }
+
+      function update(dt) {
+        // Clouds drift
+        for (let i = 0; i < clouds.length; i++) {
+          clouds[i].x += clouds[i].speed * dt;
+          if (clouds[i].x > width + 110) clouds[i].x = -110;
+        }
+
+        // Rain update
+        for (let i = 0; i < raindrops.length; i++) {
+          const r = raindrops[i];
+          r.x -= r.speed * 0.18 * dt;
+          r.y += r.speed * dt;
+          if (r.y > height + 20) {
+            r.y = -20;
+            r.x = Math.random() * (width + 120);
+          }
+          if (r.x < -30) r.x = width + 20;
+        }
+
+        // Occasional spooky lightning
+        if (lightningAlpha > 0) {
+          lightningAlpha = Math.max(0, lightningAlpha - dt * 2.8);
+        }
+        lightningTimer -= dt;
+        if (lightningTimer <= 0) {
+          lightningAlpha = 0.45;
+          lightningTimer = Math.random() * 5 + 3.5;
+        }
+
+        // Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.vy += 260 * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Floating texts
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+          const f = floatingTexts[i];
+          f.y -= 36 * dt;
+          f.life -= dt;
+          if (f.life <= 0) floatingTexts.splice(i, 1);
+        }
+
+        if (shakeTimer > 0) shakeTimer -= dt;
+        if (pushSoundCooldown > 0) pushSoundCooldown -= dt;
+
+        // Bystanders idle panic
+        for (let i = 0; i < bystanders.length; i++) {
+          bystanders[i].panicPhase += dt * 5;
+        }
+
+        if (phase === PHASE.PUSHING) {
+          const gravityPull = 0.055 + Math.min(0.06, level * 0.008);
+          let pushSpeed = 0;
+
+          if (pushHeld) {
+            pushSpeed += 0.24;
+            if (pushSoundCooldown <= 0) {
+              playSound('push');
+              pushSoundCooldown = 0.18;
+            }
+          }
+          if (pushBoost > 0) {
+            pushSpeed += pushBoost;
+            pushBoost = Math.max(0, pushBoost - dt * 0.65);
+          }
+
+          const netDelta = (pushSpeed - gravityPull) * dt;
+          slopeProgress = Math.max(0.03, slopeProgress + netDelta);
+          boulderAngle += netDelta * 8;
+
+          // Dust while pushing up
+          if (netDelta > 0 && Math.random() < 0.35) {
+            const pt = getSlopePoint(slopeProgress);
+            spawnParticles(pt.x - 18, pt.y, '#94a3b8', 1, 0.4);
+          }
+
+          if (finalAscent && slopeProgress >= 0.97) {
+            slopeProgress = 0.97;
+            phase = PHASE.SUMMIT_FALL;
+            phaseTimer = 0;
+            controlsBar.classList.add('hidden');
+            const pt = getSlopePoint(slopeProgress);
+            const norm = getSlopeNormal();
+            const slopeAngle = Math.atan2(peakY - groundY, peakX - baseSlopeX);
+            const bx = pt.x + norm.nx * boulderRadius;
+            const by = pt.y + norm.ny * boulderRadius;
+            summitStrike.x = bx - Math.cos(slopeAngle) * (boulderRadius + 16);
+            summitStrike.y = by - Math.sin(slopeAngle) * (boulderRadius + 16) + boulderRadius * 0.35 - 20;
+            summitStrike.boltAlpha = 1.0;
+            summitStrike.struck = true;
+            summitStrike.boltPoints = [];
+            const startX = summitStrike.x + (Math.random() - 0.5) * 70;
+            const steps = 10;
+            for (let i = 0; i <= steps; i++) {
+              const t = i / steps;
+              summitStrike.boltPoints.push({
+                x: startX + (summitStrike.x - startX) * t + (i > 0 && i < steps ? (Math.random() - 0.5) * 34 : 0),
+                y: summitStrike.y * t
+              });
+            }
+            lightningAlpha = 0.85;
+            shakeTimer = 0.45;
+            playSound('thunder');
+            spawnParticles(summitStrike.x, summitStrike.y, '#f8fafc', 28, 1.5);
+            spawnParticles(summitStrike.x, summitStrike.y, '#38bdf8', 16, 1.2);
+            addFloatingText(summitStrike.x - 24, summitStrike.y - 42, 'رعد و برق زد! ⚡💀', '#f8fafc');
+            showToast('سنگ به قله رسید، اما رعد و برق شخصیت را کشت!', 2.6);
+          } else if (!finalAscent && slopeProgress >= slipThreshold) {
+            // Boulder slips unexpectedly + crowd screams!
+            phase = PHASE.SLIPPING;
+            boulderRollSpeed = 0.12;
+            playSound('slip');
+            playSound('scream');
+            controlsBar.classList.add('hidden');
+            showToast('اوه نه! سنگ سر خورد! صدای جیغ بلند شد!', 1.9);
+            const pt = getSlopePoint(slopeProgress);
+            addFloatingText(pt.x, pt.y - 50, 'سُر خورد!! 😱', '#fbbf24');
+            const tgt = bystanders[currentTargetIndex];
+            if (tgt && tgt.kind !== 'tree') {
+              addFloatingText(tgt.x, groundY - 68, 'جیغغغ!! 😱', '#f8fafc');
+            }
+          }
+          updateHUD();
+        } else if (phase === PHASE.SLIPPING) {
+          // Accelerate down the slope
+          boulderRollSpeed += dt * 1.45;
+          slopeProgress -= boulderRollSpeed * dt;
+          boulderAngle -= boulderRollSpeed * dt * 10;
+
+          if (Math.random() < 0.6) {
+            const pt = getSlopePoint(Math.max(0, slopeProgress));
+            spawnParticles(pt.x, pt.y, '#e2e8f0', 2, 0.7);
+          }
+
+          if (slopeProgress <= 0) {
+            slopeProgress = 0;
+            // Launch off the bottom of the slope toward the current target person!
+            const target = bystanders[currentTargetIndex];
+            const startPt = getSlopePoint(0);
+            const norm = getSlopeNormal();
+            flyingBoulder.x = startPt.x + norm.nx * boulderRadius;
+            flyingBoulder.y = startPt.y + norm.ny * boulderRadius;
+
+            // Calculate trajectory to land directly on the target person
+            const flightTime = 0.55;
+            const gravity = 820;
+            flyingBoulder.vx = (target.x - flyingBoulder.x) / flightTime;
+            flyingBoulder.vy = (target.y - boulderRadius - flyingBoulder.y - 0.5 * gravity * flightTime * flightTime) / flightTime;
+            flyingBoulder.willDodge = target.canDodge && Math.random() < 0.42;
+            flyingBoulder.missed = false;
+            flyingBoulder.dodgeDir = target.x > 70 ? -1 : 1;
+            phase = PHASE.SQUASHED;
+            phaseTimer = 0;
+          }
+          updateHUD();
+        } else if (phase === PHASE.SQUASHED) {
+          const target = bystanders[currentTargetIndex];
+          if (!target.squashed && !flyingBoulder.missed) {
+            // Boulder flying in arc toward target
+            const gravity = 820;
+            flyingBoulder.vy += gravity * dt;
+            flyingBoulder.x += flyingBoulder.vx * dt;
+            flyingBoulder.y += flyingBoulder.vy * dt;
+            boulderAngle -= dt * 10;
+
+            // Trigger dodge just before impact
+            if (flyingBoulder.willDodge && flyingBoulder.vy > 0 && target.dodgeOffsetX === 0 && flyingBoulder.y > groundY - boulderRadius - 90) {
+              target.dodgeOffsetX = flyingBoulder.dodgeDir * 44;
+              target.dodgeOffsetY = -22;
+              playSound('dodge');
+              addFloatingText(target.x, groundY - 62, 'جا خالی! 😜', '#38bdf8');
+            }
+
+            // Smoothly settle dodge jump back to ground
+            if (target.dodgeOffsetY < 0) {
+              target.dodgeOffsetY = Math.min(0, target.dodgeOffsetY + 95 * dt);
+            }
+
+            if (flyingBoulder.y >= groundY - boulderRadius) {
+              flyingBoulder.y = groundY - boulderRadius;
+              if (flyingBoulder.willDodge) {
+                flyingBoulder.missed = true;
+                shakeTimer = 0.2;
+                playSound('push');
+                spawnParticles(flyingBoulder.x, groundY - 4, '#94a3b8', 16, 1.0);
+                addFloatingText(flyingBoulder.x, groundY - 46, 'خطا رفت!', '#e2e8f0');
+
+                // Spawn crow to fly in and eat the main character
+                const p0 = getSlopePoint(0.08);
+                const n = getSlopeNormal();
+                const slopeAngle = Math.atan2(peakY - groundY, peakX - baseSlopeX);
+                const heroDist = boulderRadius + 16;
+                const heroX = (p0.x + n.nx * boulderRadius) - Math.cos(slopeAngle) * heroDist;
+                const heroY = (p0.y + n.ny * boulderRadius) - Math.sin(slopeAngle) * heroDist + boulderRadius * 0.35 - 22;
+
+                crow.active = true;
+                crow.x = -50;
+                crow.y = 50;
+                crow.targetX = heroX;
+                crow.targetY = heroY;
+                crow.state = 'FLY_IN';
+                crow.timer = 0;
+                crow.heroEaten = false;
+                playSound('crow');
+                showToast(`${target.name} جا خالی داد! کلاغ به شخصیت اصلی حمله کرد!`, 2.6);
+              } else {
+                target.squashed = true;
+                target.squashScale = 0.18;
+                shakeTimer = 0.32;
+                playSound('squash');
+                spawnParticles(target.x, groundY - 10, target.color, 26, 1.4);
+                spawnParticles(target.x, groundY - 6, '#94a3b8', 16, 1.1);
+                addFloatingText(target.x, groundY - 48, 'له شد! 💥', '#fb7185');
+                showToast(`${target.name} له شد! ورود به مرحله بعد...`, 2.0);
+                updateHUD();
+              }
+            }
+          } else {
+            if (target.dodgeOffsetY < 0) {
+              target.dodgeOffsetY = Math.min(0, target.dodgeOffsetY + 95 * dt);
+            }
+            // Update crow animation if missed
+            if (crow.active) {
+              crow.wingPhase += dt * 16;
+              if (crow.state === 'FLY_IN') {
+                const dx = crow.targetX - crow.x;
+                const dy = crow.targetY - crow.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 10) {
+                  crow.x = crow.targetX;
+                  crow.y = crow.targetY;
+                  crow.state = 'EATING';
+                  crow.timer = 0;
+                  playSound('crow');
+                  playSound('laugh');
+                  addFloatingText(crow.targetX, crow.targetY - 30, 'کلاغ خوردش! 🐦‍⬛💀', '#f8fafc');
+                  addFloatingText(target.x, groundY - 64, 'هاهاها! 😂', '#e2e8f0');
+                } else {
+                  const spd = 520;
+                  crow.x += (dx / dist) * spd * dt;
+                  crow.y += (dy / dist) * spd * dt;
+                }
+              } else if (crow.state === 'EATING') {
+                crow.timer += dt;
+                if (Math.random() < 0.35) {
+                  spawnParticles(crow.x, crow.y + 6, '#18181b', 2, 0.6);
+                  spawnParticles(crow.x, crow.y + 6, '#e2e8f0', 1, 0.5);
+                }
+                if (crow.timer >= 0.55) {
+                  crow.heroEaten = true;
+                }
+                if (crow.timer >= 1.35) {
+                  crow.state = 'FLY_AWAY';
+                }
+              } else if (crow.state === 'FLY_AWAY') {
+                crow.x += 340 * dt;
+                crow.y -= 210 * dt;
+              }
+            }
+
+            phaseTimer += dt;
+            const waitDuration = flyingBoulder.missed ? 2.7 : 1.5;
+            if (phaseTimer >= waitDuration) {
+              if (flyingBoulder.missed) {
+                setupLevel(level, true);
+              } else {
+                currentTargetIndex += 1;
+                if (currentTargetIndex >= bystanders.length) {
+                  if (endlessMode) {
+                    initBystanders();
+                    computeGeometry();
+                    playSound('levelup');
+                    setupLevel(level + 1);
+                  } else {
+                    finalAscent = true;
+                    playSound('levelup');
+                    setupLevel(level + 1);
+                  }
+                } else {
+                  playSound('levelup');
+                  setupLevel(level + 1);
+                }
+              }
+            }
+          }
+        } else if (phase === PHASE.SUMMIT_FALL) {
+          if (summitStrike.boltAlpha > 0) {
+            summitStrike.boltAlpha = Math.max(0, summitStrike.boltAlpha - dt * 0.65);
+          }
+          phaseTimer += dt;
+          if (phaseTimer >= 2.3) {
+            startDogChapter();
+          }
+        } else if (phase === PHASE.DOG_REINCARNATE) {
+          phaseTimer += dt;
+          if (phaseTimer >= 2.8) {
+            phase = PHASE.DOG_CHASE;
+            dogStartedRunning = false;
+            controlsBar.classList.remove('hidden');
+            btnHop.classList.remove('hidden');
+            btnPushIcon.textContent = '🐾';
+            btnPushText.textContent = 'بدو بالا!';
+            controlsHint.textContent = 'دویدن: D یا فلش راست | پرش از روی مانع و بریدگی: Space یا W';
+            showToast('متوجه ۵ نفر پشت سرت شدی! برای فرار بدو و از موانع بپر!', 3.0);
+          }
+        } else if (phase === PHASE.DOG_CHASE) {
+          if (dogHopY < 0 || dogHopVy < 0) {
+            dogHopVy += 880 * dt;
+            dogHopY += dogHopVy * dt;
+            if (dogHopY >= 0) {
+              dogHopY = 0;
+              dogHopVy = 0;
+            }
+          }
+
+          let runSpeed = 0;
+          if (pushHeld) {
+            runSpeed += 0.145;
+            if (pushSoundCooldown <= 0 && dogHopY === 0) {
+              playSound('push');
+              pushSoundCooldown = 0.2;
+            }
+          }
+          if (pushBoost > 0) {
+            runSpeed += pushBoost * 0.45;
+            pushBoost = Math.max(0, pushBoost - dt * 0.8);
+          }
+          if (runSpeed > 0 && !dogStartedRunning) {
+            dogStartedRunning = true;
+            showToast('پا به فرار گذاشتی! ۵ نفر افتادن دنبالت!', 2.2);
+          }
+          dogProgress = Math.min(1.0, dogProgress + runSpeed * dt);
+          hudProgress.textContent = `${Math.round(dogProgress * 100)}%`;
+
+          if (dogStartedRunning) {
+            chaserProgress += 0.092 * dt;
+          }
+
+          let hitHazard = false;
+          for (let i = 0; i < HAZARDS.length; i++) {
+            const h = HAZARDS[i];
+            if (Math.abs(dogProgress - h.t) < 0.018 && dogHopY > -18) {
+              hitHazard = true;
+              break;
+            }
+          }
+
+          if (hitHazard) {
+            phase = PHASE.DOG_COLLARED;
+            collarWalkProgress = dogProgress;
+            controlsBar.classList.add('hidden');
+            btnHop.classList.add('hidden');
+            playSound('squash');
+            playSound('laugh');
+            const dp = getPointOnZigzag(dogProgress);
+            addFloatingText(dp.x, dp.y - 36, 'افتاد و اسیر شد! ⛓️', '#f8fafc');
+            showToast('به مانع خوردی یا توی بریدگی افتادی! برگشت به مرحله تناسخ سگ...', 2.6);
+          } else if (dogStartedRunning && chaserProgress >= dogProgress - 0.03) {
+            phase = PHASE.DOG_COLLARED;
+            collarWalkProgress = dogProgress;
+            controlsBar.classList.add('hidden');
+            btnHop.classList.add('hidden');
+            playSound('laugh');
+            showToast('آدم‌ها رسیدند و قلاده بستند! برگشت به مرحله تناسخ سگ...', 2.6);
+          } else if (dogProgress >= 1.0) {
+            dogProgress = 1.0;
+            phase = PHASE.ROOFTOP_CHOICE;
+            controlsBar.classList.add('hidden');
+            btnHop.classList.add('hidden');
+            rooftopBar.classList.remove('hidden');
+            showToast('به پشت‌بام رسیدی! پایین یک استخر است... می‌پری داخلش؟', 3.4);
+          }
+        } else if (phase === PHASE.ROOFTOP_CHOICE) {
+          // Chasers keep climbing while player decides whether to jump or wait!
+          chaserProgress += 0.125 * dt;
+          if (chaserProgress >= 0.96) {
+            phase = PHASE.DOG_COLLARED;
+            collarWalkProgress = 0.96;
+            rooftopBar.classList.add('hidden');
+            playSound('laugh');
+            const roofPt = getPointOnZigzag(1.0);
+            addFloatingText(roofPt.x, roofPt.y - 44, 'قلاده بستند! ⛓️', '#f8fafc');
+            showToast('صبر کردی... آدم‌ها رسیدند، قلاده بستند و با خودشان پایین می‌برند!', 3.2);
+          }
+        } else if (phase === PHASE.DOG_JUMP) {
+          if (!dogJump.landed) {
+            dogJump.vy += 760 * dt;
+            dogJump.x += dogJump.vx * dt;
+            dogJump.y += dogJump.vy * dt;
+            if (dogJump.y >= groundY - 8) {
+              dogJump.y = groundY - 8;
+              dogJump.landed = true;
+              shakeTimer = 0.28;
+              playSound('squash');
+              spawnParticles(dogJump.x, groundY - 6, '#a3e635', 28, 1.3);
+              spawnParticles(dogJump.x, groundY - 6, '#f8fafc', 16, 1.0);
+              addFloatingText(dogJump.x + 25, groundY - 44, 'این که استخر اسید بود!! 🧪💀', '#f8fafc');
+              showToast('آب نبود... استخر اسید بود!!', 3.0);
+            }
+          } else {
+            phaseTimer += dt;
+            if (phaseTimer >= 1.8) {
+              showEndingModal('🧪💀', 'استخر اسید بود!!', 'به خیال اینکه استخر آب است از پشت‌بام پریدی، اما استخر اسید بود و سگ در آن حل شد!');
+            }
+          }
+        } else if (phase === PHASE.DOG_COLLARED) {
+          collarWalkProgress = Math.max(0.05, collarWalkProgress - 0.28 * dt);
+          if (collarWalkProgress <= 0.05) {
+            startDogChapter();
+          }
+        }
+      }
+
+      function drawCloud(c) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.scale(c.s, c.s);
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.92)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 22, 0, Math.PI * 2);
+        ctx.arc(24, -6, 26, 0, Math.PI * 2);
+        ctx.arc(50, 0, 20, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawBystander(b, isTarget) {
+        ctx.save();
+        ctx.translate(b.x + (b.dodgeOffsetX || 0), b.y + (b.dodgeOffsetY || 0));
+
+        if (b.squashed) {
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.ellipse(0, -3, 22, 4.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          if (b.kind !== 'tree') {
+            ctx.fillStyle = '#d1d5db';
+            ctx.beginPath();
+            ctx.ellipse(0, -6, 8, 2.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+          return;
+        }
+
+        if (b.kind === 'tree') {
+          // Monochrome spooky tree
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(-5, -26, 10, 26);
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -68);
+          ctx.lineTo(18, -36);
+          ctx.lineTo(-18, -36);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(0, -52);
+          ctx.lineTo(22, -22);
+          ctx.lineTo(-22, -22);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+          return;
+        }
+
+        const hop = (phase === PHASE.SLIPPING || phase === PHASE.SQUASHED) && isTarget
+          ? Math.abs(Math.sin(b.panicPhase * 2.2)) * 8
+          : Math.sin(b.panicPhase) * 1.5;
+        ctx.translate(0, -hop);
+
+        if (b.kind === 'sheep') {
+          // Monochrome Sheep / Animal
+          ctx.strokeStyle = '#09090b';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-10, -10); ctx.lineTo(-10, 0);
+          ctx.moveTo(-4, -10); ctx.lineTo(-4, 0);
+          ctx.moveTo(4, -10); ctx.lineTo(4, 0);
+          ctx.moveTo(10, -10); ctx.lineTo(10, 0);
+          ctx.stroke();
+
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.ellipse(0, -16, 14, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#09090b';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Head
+          ctx.fillStyle = '#18181b';
+          ctx.beginPath();
+          ctx.arc(13, -19, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(15, -20, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          return;
+        }
+
+        // Legs (Man & Woman)
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(-4, -14); ctx.lineTo(-6, 0);
+        ctx.moveTo(4, -14); ctx.lineTo(6, 0);
+        ctx.stroke();
+
+        // Torso / Dress
+        ctx.fillStyle = b.color;
+        ctx.strokeStyle = '#09090b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (b.kind === 'woman') {
+          ctx.moveTo(-6, -34);
+          ctx.lineTo(6, -34);
+          ctx.lineTo(12, -12);
+          ctx.lineTo(-12, -12);
+          ctx.closePath();
+        } else {
+          ctx.roundRect(-8, -34, 16, 22, 4);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        // Hair for woman
+        if (b.kind === 'woman') {
+          ctx.fillStyle = '#18181b';
+          ctx.beginPath();
+          ctx.arc(-2, -43, 10, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillRect(-10, -43, 6, 14);
+        }
+
+        // Head
+        ctx.fillStyle = '#e5e7eb';
+        ctx.beginPath();
+        ctx.arc(0, -43, 8.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = '#09090b';
+        ctx.beginPath();
+        ctx.arc(3, -44, 1.5, 0, Math.PI * 2);
+        ctx.arc(-1, -44, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if ((phase === PHASE.SLIPPING || phase === PHASE.SQUASHED) && isTarget) {
+          ctx.strokeStyle = '#e5e7eb';
+          ctx.lineWidth = 2.8;
+          ctx.beginPath();
+          ctx.moveTo(-8, -28); ctx.lineTo(-15, -42);
+          ctx.moveTo(8, -28); ctx.lineTo(15, -42);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawBoulder(cx, cy, angle) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+
+        // Rock body
+        ctx.fillStyle = '#64748b';
+        ctx.beginPath();
+        ctx.arc(0, 0, boulderRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Highlight & craters so rotation is clearly visible
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.arc(-boulderRadius * 0.25, -boulderRadius * 0.25, boulderRadius * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.arc(boulderRadius * 0.35, boulderRadius * 0.2, boulderRadius * 0.22, 0, Math.PI * 2);
+        ctx.arc(-boulderRadius * 0.3, boulderRadius * 0.4, boulderRadius * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, boulderRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawHero(boulderCx, boulderCy) {
+        // Position hero just behind/below the boulder on the slope
+        const slopeAngle = Math.atan2(peakY - groundY, peakX - baseSlopeX);
+        const heroDist = boulderRadius + 16;
+        const hx = boulderCx - Math.cos(slopeAngle) * heroDist;
+        const hy = boulderCy - Math.sin(slopeAngle) * heroDist + boulderRadius * 0.35;
+
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.rotate(slopeAngle * 0.55);
+
+        // Shadow/legs
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(-4, -10);
+        ctx.lineTo(-10, 6);
+        ctx.moveTo(4, -10);
+        ctx.lineTo(8, 6);
+        ctx.stroke();
+
+        // Body leaning forward (Black & White)
+        ctx.fillStyle = '#18181b';
+        ctx.beginPath();
+        ctx.roundRect(-8, -30, 16, 22, 5);
+        ctx.fill();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Pushing arms (White/Gray)
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(6, -24);
+        ctx.lineTo(20, -22);
+        ctx.stroke();
+
+        // Head (Black & White)
+        ctx.fillStyle = '#f3f4f6';
+        ctx.beginPath();
+        ctx.arc(2, -38, 8.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Headband (Dark gray)
+        ctx.fillStyle = '#27272a';
+        ctx.fillRect(-6, -42, 16, 3.5);
+
+        ctx.restore();
+      }
+
+      function drawCrow() {
+        if (!crow.active) return;
+        ctx.save();
+        ctx.translate(crow.x, crow.y);
+        const flap = Math.sin(crow.wingPhase) * 14;
+        const peck = crow.state === 'EATING' ? Math.abs(Math.sin(crow.wingPhase * 0.8)) * 0.45 : 0;
+        ctx.rotate(peck);
+
+        // Wings
+        ctx.strokeStyle = '#09090b';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-4, -2);
+        ctx.quadraticCurveTo(-18, -14 + flap, -26, -4 + flap);
+        ctx.moveTo(4, -2);
+        ctx.quadraticCurveTo(18, -14 + flap, 26, -4 + flap);
+        ctx.stroke();
+
+        // Body
+        ctx.fillStyle = '#09090b';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 14, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Head
+        ctx.beginPath();
+        ctx.arc(11, -6, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Glowing eerie eye
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(13, -7, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Sharp beak
+        ctx.fillStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(17, -7);
+        ctx.lineTo(26, -4);
+        ctx.lineTo(17, -2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function render() {
+        ctx.save();
+        if (shakeTimer > 0) {
+          const m = shakeTimer * 24;
+          ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+        }
+
+        // Stormy & Scary Sky gradient
+        const sky = ctx.createLinearGradient(0, 0, 0, height);
+        sky.addColorStop(0, '#020617');
+        sky.addColorStop(0.55, '#0f172a');
+        sky.addColorStop(1, '#1e293b');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, width, height);
+
+        // Lightning flash
+        if (lightningAlpha > 0) {
+          ctx.fillStyle = `rgba(226, 232, 240, ${lightningAlpha})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        // Pale eerie moon
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.22)';
+        ctx.beginPath();
+        ctx.arc(width * 0.16, height * 0.18, 36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.55)';
+        ctx.beginPath();
+        ctx.arc(width * 0.16, height * 0.18, 24, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dark storm clouds
+        for (let i = 0; i < clouds.length; i++) {
+          drawCloud(clouds[i]);
+        }
+
+        // Distant background mountains
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.moveTo(0, groundY);
+        ctx.lineTo(width * 0.22, height * 0.48);
+        ctx.lineTo(width * 0.45, groundY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Main playable mountain
+        const mGrad = ctx.createLinearGradient(baseSlopeX, peakY, peakX, groundY);
+        mGrad.addColorStop(0, '#64748b');
+        mGrad.addColorStop(1, '#334155');
+        ctx.fillStyle = mGrad;
+        ctx.beginPath();
+        ctx.moveTo(baseSlopeX, groundY);
+        ctx.lineTo(peakX, peakY);
+        ctx.lineTo(width, peakY + 25);
+        ctx.lineTo(width, groundY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Snow cap on peak
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        const snowStart = getSlopePoint(0.84);
+        ctx.moveTo(snowStart.x, snowStart.y);
+        ctx.lineTo(peakX, peakY);
+        ctx.lineTo(width, peakY + 25);
+        ctx.lineTo(width, peakY + 60);
+        ctx.lineTo(snowStart.x + 25, snowStart.y + 18);
+        ctx.closePath();
+        ctx.fill();
+
+        // Dark stormy valley floor
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, groundY, width, height - groundY);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, groundY, width, 6);
+
+        // Bystanders at the bottom
+        for (let i = 0; i < bystanders.length; i++) {
+          drawBystander(bystanders[i], i === currentTargetIndex);
+        }
+
+        // Boulder & Hero
+        if (phase === PHASE.SQUASHED) {
+          drawBoulder(flyingBoulder.x, flyingBoulder.y, boulderAngle);
+          // Hero stands on slope unless eaten by the crow
+          if (!crow.heroEaten) {
+            const p0 = getSlopePoint(0.08);
+            const n = getSlopeNormal();
+            drawHero(p0.x + n.nx * boulderRadius, p0.y + n.ny * boulderRadius);
+          }
+          drawCrow();
+        } else {
+          const pt = getSlopePoint(slopeProgress);
+          const norm = getSlopeNormal();
+          const bx = pt.x + norm.nx * boulderRadius;
+          const by = pt.y + norm.ny * boulderRadius;
+          drawBoulder(bx, by, boulderAngle);
+          if (phase === PHASE.PUSHING || phase === PHASE.MENU) {
+            drawHero(bx, by);
+          } else if (phase === PHASE.SUMMIT_FALL || phase === PHASE.VICTORY) {
+            // Charred hero struck by lightning at the summit
+            ctx.save();
+            ctx.translate(summitStrike.x, summitStrike.y + 12);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath();
+            ctx.roundRect(-8, -14, 16, 22, 5);
+            ctx.fill();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = '#475569';
+            ctx.beginPath();
+            ctx.arc(0, -22, 8.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Draw dramatic glowing lightning bolt + branches if active
+            if (summitStrike.boltAlpha > 0 && summitStrike.boltPoints.length > 1) {
+              ctx.save();
+              ctx.globalAlpha = Math.min(1, summitStrike.boltAlpha * 1.15);
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+
+              // Outer electric cyan glow
+              ctx.strokeStyle = '#38bdf8';
+              ctx.shadowColor = '#38bdf8';
+              ctx.shadowBlur = 28;
+              ctx.lineWidth = 12;
+              ctx.beginPath();
+              ctx.moveTo(summitStrike.boltPoints[0].x, summitStrike.boltPoints[0].y);
+              for (let i = 1; i < summitStrike.boltPoints.length; i++) {
+                ctx.lineTo(summitStrike.boltPoints[i].x, summitStrike.boltPoints[i].y);
+              }
+              ctx.stroke();
+
+              // Bright white core
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 4.5;
+              ctx.stroke();
+
+              // Side branches for extra clarity
+              ctx.lineWidth = 2.5;
+              for (let i = 2; i < summitStrike.boltPoints.length - 2; i += 3) {
+                const pt = summitStrike.boltPoints[i];
+                ctx.beginPath();
+                ctx.moveTo(pt.x, pt.y);
+                ctx.lineTo(pt.x + (i % 2 === 0 ? 32 : -32), pt.y + 26);
+                ctx.lineTo(pt.x + (i % 2 === 0 ? 48 : -48), pt.y + 52);
+                ctx.stroke();
+              }
+
+              // Impact flash ring on hero
+              ctx.fillStyle = 'rgba(224, 242, 254, 0.75)';
+              ctx.beginPath();
+              ctx.arc(summitStrike.x, summitStrike.y, 26 * summitStrike.boltAlpha, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          } else {
+            // Hero tumbles/watches from where it slipped
+            const slipP = getSlopePoint(slipThreshold * 0.8);
+            drawHero(slipP.x + norm.nx * boulderRadius, slipP.y + norm.ny * boulderRadius);
+          }
+        }
+
+        // --- ACT 2 RENDERING (Dog Reincarnation & Zigzag Rooftop Chase) ---
+        if (
+          phase === PHASE.DOG_REINCARNATE ||
+          phase === PHASE.DOG_CHASE ||
+          phase === PHASE.ROOFTOP_CHOICE ||
+          phase === PHASE.DOG_JUMP ||
+          phase === PHASE.DOG_COLLARED ||
+          (phase === PHASE.VICTORY && victoryIcon.textContent !== '⚡💀')
+        ) {
+          // Clear mountain scene with stormy rooftop backdrop
+          const sky2 = ctx.createLinearGradient(0, 0, 0, height);
+          sky2.addColorStop(0, '#020617');
+          sky2.addColorStop(1, '#1e293b');
+          ctx.fillStyle = sky2;
+          ctx.fillRect(0, 0, width, height);
+
+          for (let i = 0; i < clouds.length; i++) drawCloud(clouds[i]);
+
+          const nodes = getZigzagNodes();
+          const roof = nodes[nodes.length - 1];
+
+          // Building & Rooftop silhouette
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(width * 0.16, roof.y, width * 0.64, groundY - roof.y);
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(width * 0.16, roof.y, width * 0.64, groundY - roof.y);
+
+          // Rooftop edge ledge
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(width * 0.14, roof.y - 8, width * 0.68, 10);
+
+          // Valley ground
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(0, groundY, width, height - groundY);
+
+          // Pool / Mattress below rooftop (reveals acid green when landed in!)
+          const poolCenterX = width * 0.11;
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(poolCenterX - 38, groundY - 10, 76, 12);
+          ctx.fillStyle = dogJump.landed ? '#84cc16' : '#64748b';
+          ctx.fillRect(poolCenterX - 33, groundY - 8, 66, 7);
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(poolCenterX - 38, groundY - 10, 76, 12);
+
+          // Zigzag Staircase
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 8;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(nodes[0].x, nodes[0].y);
+          for (let i = 1; i < nodes.length; i++) {
+            ctx.lineTo(nodes[i].x, nodes[i].y);
+          }
+          ctx.stroke();
+
+          // Gaps & Obstacles on the stairs
+          for (let i = 0; i < HAZARDS.length; i++) {
+            const h = HAZARDS[i];
+            const hp = getPointOnZigzag(h.t);
+            if (h.kind === 'gap') {
+              ctx.fillStyle = '#0f172a';
+              ctx.beginPath();
+              ctx.arc(hp.x, hp.y, 14, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#334155';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            } else {
+              ctx.fillStyle = '#18181b';
+              ctx.strokeStyle = '#f8fafc';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(hp.x - 10, hp.y);
+              ctx.lineTo(hp.x, hp.y - 20);
+              ctx.lineTo(hp.x + 10, hp.y);
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+            }
+          }
+
+          // Helper to draw Monochrome Dog
+          const drawDog = (dx, dy, dir, dead = false) => {
+            ctx.save();
+            ctx.translate(dx, dy);
+            if (dead) ctx.rotate(Math.PI);
+            if (dir < 0) ctx.scale(-1, 1);
+
+            // Legs
+            ctx.strokeStyle = '#09090b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-9, -8); ctx.lineTo(-10, 0);
+            ctx.moveTo(-4, -8); ctx.lineTo(-3, 0);
+            ctx.moveTo(5, -8); ctx.lineTo(4, 0);
+            ctx.moveTo(10, -8); ctx.lineTo(11, 0);
+            ctx.stroke();
+
+            // Body
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.ellipse(0, -13, 14, 7.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#09090b';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(-13, -15);
+            ctx.lineTo(-20, -22);
+            ctx.stroke();
+
+            // Head & Ear
+            ctx.fillStyle = '#e2e8f0';
+            ctx.beginPath();
+            ctx.arc(13, -18, 6.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath();
+            ctx.ellipse(10, -21, 2.5, 4.5, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          };
+
+          // Helper to draw Chasers
+          const drawChaser = (cx, cy) => {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.strokeStyle = '#09090b';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-4, -12); ctx.lineTo(-6, 0);
+            ctx.moveTo(4, -12); ctx.lineTo(6, 0);
+            ctx.stroke();
+            ctx.fillStyle = '#cbd5e1';
+            ctx.beginPath();
+            ctx.roundRect(-7, -30, 14, 19, 4);
+            ctx.fill();
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath();
+            ctx.arc(0, -37, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          };
+
+          if (phase === PHASE.DOG_REINCARNATE) {
+            const p = getPointOnZigzag(0.04);
+            drawDog(p.x, p.y, 1);
+            for (let c = 0; c < 5; c++) {
+              drawChaser(p.x - 65 - c * 26, groundY);
+            }
+            ctx.font = 'bold 15px Tahoma, sans-serif';
+            ctx.fillStyle = '#f8fafc';
+            ctx.textAlign = 'center';
+            ctx.fillText('دوباره زنده شدم ولی مسخ شدم به یه سگ!', p.x + 20, p.y - 44);
+          } else if (phase === PHASE.DOG_CHASE || phase === PHASE.ROOFTOP_CHOICE) {
+            const dp = getPointOnZigzag(dogProgress);
+            drawDog(dp.x, dp.y + dogHopY, dp.dir);
+            if (!dogStartedRunning) {
+              for (let c = 0; c < 5; c++) {
+                drawChaser(dp.x - 65 - c * 26, groundY);
+              }
+            } else {
+              for (let c = 0; c < 5; c++) {
+                const ct = chaserProgress - c * 0.038;
+                if (ct >= 0) {
+                  const cp = getPointOnZigzag(ct);
+                  drawChaser(cp.x, cp.y);
+                } else {
+                  drawChaser(nodes[0].x - 25 - c * 24, groundY);
+                }
+              }
+            }
+          } else if (phase === PHASE.DOG_JUMP || (phase === PHASE.VICTORY && !dogJump.survived && dogJump.landed)) {
+            drawDog(dogJump.x, dogJump.y, -1, dogJump.landed && !dogJump.survived);
+          } else if (phase === PHASE.DOG_COLLARED || (phase === PHASE.VICTORY && victoryIcon.textContent === '🐕⛓️')) {
+            const dp = getPointOnZigzag(collarWalkProgress);
+            const cp = getPointOnZigzag(Math.min(1, collarWalkProgress + 0.05));
+            drawDog(dp.x, dp.y, -1);
+            drawChaser(cp.x, cp.y);
+            // Collar & Leash line
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(dp.x + 10, dp.y - 16);
+            ctx.lineTo(cp.x, cp.y - 20);
+            ctx.stroke();
+          }
+        }
+
+        // Falling rain
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (let i = 0; i < raindrops.length; i++) {
+          const r = raindrops[i];
+          ctx.moveTo(r.x, r.y);
+          ctx.lineTo(r.x - r.len * 0.18, r.y + r.len);
+        }
+        ctx.stroke();
+
+        // Particles
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Floating Texts
+        ctx.font = 'bold 16px Tahoma, sans-serif';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < floatingTexts.length; i++) {
+          const f = floatingTexts[i];
+          ctx.globalAlpha = Math.max(0, f.life);
+          ctx.fillStyle = f.color;
+          ctx.fillText(f.text, f.x, f.y);
+        }
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
+        lastTime = now;
+        update(dt);
+        render();
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function startLoop() {
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        lastTime = performance.now();
+        rafId = requestAnimationFrame(loop);
+      }
+
+      // Keyboard input
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+          if (phase === PHASE.PUSHING || phase === PHASE.DOG_CHASE) e.preventDefault();
+          if (!e.repeat) triggerPushImpulse();
+          pushHeld = true;
+          btnPush.classList.add('pressed');
+        } else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+          if (phase === PHASE.PUSHING || phase === PHASE.DOG_CHASE || phase === PHASE.ROOFTOP_CHOICE) e.preventDefault();
+          if (!e.repeat) {
+            if (phase === PHASE.DOG_CHASE) triggerHop();
+            else if (phase === PHASE.ROOFTOP_CHOICE) triggerRoofJump();
+            else triggerPushImpulse();
+          }
+          if (phase === PHASE.PUSHING) {
+            pushHeld = true;
+            btnPush.classList.add('pressed');
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+          pushHeld = false;
+          btnPush.classList.remove('pressed');
+        }
+      });
+
+      btnHop.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        triggerHop();
+      });
+
+      // Push Button & Canvas Touch/Click
+      btnPush.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        triggerPushImpulse();
+        pushHeld = true;
+        btnPush.classList.add('pressed');
+      });
+
+      const releasePush = () => {
+        pushHeld = false;
+        btnPush.classList.remove('pressed');
+      };
+      btnPush.addEventListener('pointerup', releasePush);
+      btnPush.addEventListener('pointercancel', releasePush);
+      btnPush.addEventListener('pointerleave', releasePush);
+
+      canvas.addEventListener('pointerdown', () => {
+        if (phase === PHASE.PUSHING) {
+          triggerPushImpulse();
+          pushHeld = true;
+        }
+      });
+      window.addEventListener('pointerup', releasePush);
+
+      // UI Buttons
+      btnStart.addEventListener('click', startNewGame);
+      btnJumpRoof.addEventListener('click', triggerRoofJump);
+      btnReset.addEventListener('click', startNewGame);
+      btnRestartWin.addEventListener('click', startNewGame);
+      btnEndless.addEventListener('click', continueEndless);
+
+      btnMute.addEventListener('click', () => {
+        ensureAudio();
+        isMuted = !isMuted;
+        muteIcon.textContent = isMuted ? '🔇' : '🔊';
+      });
+
+      window.addEventListener('resize', resizeCanvas);
+
+      window.onload = function () {
+        try {
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+          }
+        } catch (e) {}
+        initBystanders();
+        resizeCanvas();
+        updateHUD();
+        startLoop();
+      };
+    })();
+  </script>
+</body>
+</html>
